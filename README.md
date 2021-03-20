@@ -1,1 +1,1 @@
-# offline_sketch
+# Offline (conservative) count-min sketch

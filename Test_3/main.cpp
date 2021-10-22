@@ -14,48 +14,50 @@ template <typename ccmbase_obj> void update_count_collision_from_file(string fil
 
 int main(){
 
-    sketch::ocm::ccmbase <int32_t, sketch::hash::HasherSet<sketch::hash::WangHash> > cms_obj(19,10,137,false);   // np = 5, nh = 10, seed = 137,
-    sketch::ocm::ccmbase <int32_t, sketch::hash::HasherSet<sketch::hash::WangHash> > ccms_obj(19,10,137,true);
+    sketch::ocm::ccmbase <int32_t, sketch::hash::WangHash > cms_obj(9,10,137,false);   // np = 5, nh = 10, seed = 137,
+    sketch::ocm::ccmbase <int32_t, sketch::hash::WangHash > ccms_obj(9,10,137,true);
 
     update_count_from_file("rymv.sim.fa",22, cms_obj);
-    cout<<"True Count: "<<counter<<endl;
+    //cout<<"True Count: "<<counter<<endl;
     update_count_from_file("rymv.sim.fa",22, ccms_obj);
 
 
     //estimation
-    cout<<"CMS Estimate count: "<<cms_obj.est_count(cal(sample_kmer))<<endl; //estimation of the sample k-mer
-    cout<<"CCMS Estimate count: "<<ccms_obj.est_count(cal(sample_kmer))<<endl;
+    //cout<<"CMS Estimate count: "<<cms_obj.est_count(cal(sample_kmer))<<endl; //estimation of the sample k-mer
+    //cout<<"CCMS Estimate count: "<<ccms_obj.est_count(cal(sample_kmer))<<endl;
 
 
     //construct OCM
-    sketch::ocm::ocmbase <uint64_t, sketch::hash::HasherSet<sketch::hash::WangHash> > sketch1(19,10,137);
-    for(int r = 1; r<= 10; r++){
+    sketch::ocm::ocmbase <uint64_t, sketch::hash::WangHash > sketch1(9,10,137);
+    for(int r = 1; r<= 5; r++){
         if (r > 1){
-            // for all kmers update collision
+             // for all kmers update collision
             update_collision_from_file("rymv.sim.fa",22,sketch1,r);
         }
         sketch1.clear_core();
         // for all kmer update count.
         update_count_from_file("rymv.sim.fa",22,sketch1);
+        cout<<"Sketch 1: Round "<<r<<" is complete\n";
     }
     //end construct OCM
 
-    cout<<"Offline CMS Estimate count: "<<sketch1.est_count(cal(sample_kmer))<<endl;
+    //cout<<"Offline CMS Estimate count: "<<sketch1.est_count(cal(sample_kmer))<<endl;
 
 
     //construct OCCM
-    sketch::ocm::ocmbase <uint64_t, sketch::hash::HasherSet<sketch::hash::WangHash> > sketch2(19,10,137);
-    for(int r = 1; r<= 10; r++){
+    sketch::ocm::ocmbase <uint64_t, sketch::hash::WangHash > sketch2(9,10,137);
+    for(int r = 1; r<= 5; r++){
         if (r > 1){
             // for all kmers update collision
             update_collision_from_file("rymv.sim.fa",22,sketch2,r);
         }
         sketch2.clear_core();
         // for all kmer update count.
-        update_count_collision_from_file("rymv.sim.fa",22,sketch2,r,10);
+        update_count_collision_from_file("rymv.sim.fa",22,sketch2,r,5);
+        cout<<"Sketch 2: Round "<<r<<" is complete\n";
     }
     //end construct OCCM
-    cout<<"Offline CCMS Estimate count: "<<sketch2.est_count(cal(sample_kmer))<<endl;
+    //cout<<"Offline CCMS Estimate count: "<<sketch2.est_count(cal(sample_kmer))<<endl;
 
     //query using original data:
     ifstream qifile("rymv.sim.22mer.counts.txt");
@@ -64,9 +66,10 @@ int main(){
     while(!qifile.eof()){
         qifile>>kmer_str>>file_count;
         uint64_t kmer_cal = cal(kmer_str);
-        ofile<<kmer_str<<": File-Count: "<<file_count<<" CMS-count: "<<cms_obj.est_count(kmer_cal)<<" CCMS-count: "<<ccms_obj.est_count(kmer_cal)<<" OCMS-count: "<<sketch1.est_count(kmer_cal)<<" OCCMS-count: "<<sketch2.est_count(kmer_cal)<<" \n";
-        cout<<kmer_str<<": File-Count: "<<file_count<<" CMS-count: "<<cms_obj.est_count(kmer_cal)<<" CCMS-count: "<<ccms_obj.est_count(kmer_cal)<<" OCMS-count: "<<sketch1.est_count(kmer_cal)<<" OCCMS-count: "<<sketch2.est_count(kmer_cal)<<" \n";
-    }
+        ofile<<kmer_str<<" File Count: "<<file_count<<" CMS-count: "<<cms_obj.est_count(kmer_cal)<<" CCMS-count: "<<ccms_obj.est_count(kmer_cal)<<" OCMS-count: "<<sketch1.est_count(kmer_cal)<<" OCCMS-count: "<<sketch2.est_count(kmer_cal)<<" \n";
+        //cout<<kmer_str<<" File Count: "<<file_count<<"  CMS-count: "<<cms_obj.est_count(kmer_cal)<<" CCMS-count: "<<ccms_obj.est_count(kmer_cal)<<" OCMS-count: "<<sketch1.est_count(kmer_cal)<<" OCCMS-count: "<<sketch2.est_count(kmer_cal)<<" \n";
+        }
+
 }
 
 void my_binary(int64_t n) //converting k-mer to binary representation

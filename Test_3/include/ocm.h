@@ -168,28 +168,41 @@ public:
         for(unsigned added = 0; added < nh_; added++){
             min_collision = std::min(min_collision, collision_[pos[added]]);
         }
-        //std::cout<<"DEBUG "<<"min collision is : "<<min_collision<<std::endl;
+//        // DeBUG CODE
+//        if(val == 268931867597u){
+//            std::cout<<"\nBefore updating: \n";
+//            std::cout<<core_[pos[0]]<<" "<<core_[pos[1]]<<" "<<core_[pos[2]]<<" "<<core_[pos[3]]<<" "<<core_[pos[4]]<<" "<<core_[pos[5]]<<" "<<core_[pos[6]]<<" "<<core_[pos[7]]<<" "<<core_[pos[8]]<<" "<<core_[pos[9]]<<" "<<core_[pos[10]]<<" \n";
+//            std::cout<<collision_[pos[0]]<<" "<<collision_[pos[1]]<<" "<<collision_[pos[2]]<<" "<<collision_[pos[3]]<<" "<<collision_[pos[4]]<<" "<<collision_[pos[5]]<<" "<<collision_[pos[6]]<<" "<<collision_[pos[7]]<<" "<<collision_[pos[8]]<<" "<<collision_[pos[9]]<<" "<<collision_[pos[10]]<<" \n";
+//            std::cout<<"DEBUG round: "<<round<<" min collision is : "<<min_collision<<std::endl;
+//        }
+//        // END DEBUG CODE
+
         if(min_collision < current_round - 1){
-            // # >= 1 cell without collision in prev round
+            //if(val == 268931867597u) std::cout<<" # >= 1 cell without collision in prev round\n";
             CounterType min_count = std::numeric_limits<int>::max();
             for(unsigned added=0; added< nh_; added++){
                 if(collision_[pos[added]] == min_collision) min_count = std::min(min_count, core_[pos[added]]);
             }
-
+            //if(val == 268931867597u) std::cout<<"min-count is "<<min_count<<std::endl;
             for(unsigned added=0; added< nh_; added++){
                 if(collision_[pos[added]] == min_collision){
                     // c[i,j] = min(C[i,j]+1, min_count)        Changed code from paper
-                    core_[pos[added]] = min_count+ 1;
+                    if(core_[pos[added]] == min_count){
+                        core_[pos[added]] = min_count+ 1;
+                    }
                 }
             }
         }
 
         else{
-            // every cell has a collision in the prev round
+            //if(val == 268931867597u) std::cout<<" every cell has a collision in the prev round\n";
             CounterType min_count = std::numeric_limits<int>::max();
             for(unsigned added=0; added< nh_; added++){
                 min_count = std::min(min_count, core_[pos[added]]);
             }
+//            if(val == 268931867597u){
+//                std::cout<<"min-count is "<<min_count<<std::endl;
+//            }
 
             for(unsigned added=0; added< nh_; added++){
                 if(current_round < total_round && core_[pos[added]] > min_count){
@@ -197,13 +210,24 @@ public:
                 }
                 // Changed Code from paper
                 //core_[pos[added]] = std::min( core_[pos[added]] + 1, min_count);
-                core_[pos[added]] = min_count + 1;
+
+                if(core_[pos[added]] == min_count){
+                    core_[pos[added]] = min_count + 1;
+                }
             }
 
         }
+//        // DeBUG CODE
+//        if(val == 268931867597u){
+//            std::cout<<"\nAfter updating: \n";
+//            std::cout<<core_[pos[0]]<<" "<<core_[pos[1]]<<" "<<core_[pos[2]]<<" "<<core_[pos[3]]<<" "<<core_[pos[4]]<<" "<<core_[pos[5]]<<" "<<core_[pos[6]]<<" "<<core_[pos[7]]<<" "<<core_[pos[8]]<<" "<<core_[pos[9]]<<" "<<core_[pos[10]]<<" \n";
+//            std::cout<<collision_[pos[0]]<<" "<<collision_[pos[1]]<<" "<<collision_[pos[2]]<<" "<<collision_[pos[3]]<<" "<<collision_[pos[4]]<<" "<<collision_[pos[5]]<<" "<<collision_[pos[6]]<<" "<<collision_[pos[7]]<<" "<<collision_[pos[8]]<<" "<<collision_[pos[9]]<<" "<<collision_[pos[10]]<<" \n";
+//        }
+//        // END DEBUG CODE
+
     }
 
-    void update_collision(int64_t val, int round){
+    void update_collision(uint64_t val, int round){
         std::vector<CounterType> counts(nh_);
         std::vector<u_int64_t> pos(nh_);
         auto cptr = counts.data();                       //cptr points to the beginning of counts_ vector
@@ -254,6 +278,8 @@ public:
             min_collision = std::min(min_collision, collision_[pos[added]]);
         }
         //std::cout<<"DEBUG "<<"min collision is : "<<min_collision<<std::endl;
+        //std::cout<<"Estimate function is called\n";
+        //this->showCounters(val);
         for(unsigned added = 0; added < nh_; added++){
             if( collision_[pos[added]] == min_collision) min_count = core_[pos[added]];
         }
@@ -262,6 +288,20 @@ public:
 
     void showSeeds(){
         for(auto seed : seeds_) std::cout<<seed<<" ";
+        std::cout<<std::endl;
+    }
+
+    void showCounters(uint64_t val){
+        std::vector<CounterType> counts(nh_);
+        std::vector<u_int64_t> pos(nh_);
+        auto cptr = counts.data();                       //cptr points to the beginning of counts_ vector
+        std::cout<<"Showing counters for value "<<val<<" : \n";
+        for(unsigned added = 0; added < nh_; added++){
+            CounterType hv = hf_(val ^ seeds_[added]);
+            cptr[added] = hv;               //counts vector now contains hash values
+            pos[added] = (hv & mask_) + (added << np_);   // exact positions where we will increase the counter by one.
+            std::cout<<"hf: "<<added<<" core: "<<core_[pos[added]]<<" Colision: "<<collision_[pos[added]]<<std::endl;
+        }
         std::cout<<std::endl;
     }
 

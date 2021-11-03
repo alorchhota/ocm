@@ -95,30 +95,37 @@ public:
 template<typename CounterType=int32_t , typename HashStruct = WangHash >
 class ocmbase{
     std::vector<CounterType, allocator<CounterType>> core_;     //resisters of the hash table
-    std::vector<int> collision_;                                // will keep track of collision after each round
+    std::vector<int> collision_;
+    int core_size;                              // will keep track of collision after each round
     uint32_t np_;                                               // no of column (W) is 2^np_
     uint32_t nh_;                                               // number of hash functions
     uint64_t mask_;                                             // and-ing a number with mask will give X mod W
     uint64_t seedseed_;
-    const bool conservative_;
+    bool conservative_;
     const HashStruct hf_;
+    std::string output_file;
     std::vector<uint64_t, allocator<uint64_t>> seeds_;
     CounterType       *data()       {return core_.data();}     //data is a pointer to a function
     const CounterType *data() const {return core_.data();}
     size_t size() const {return core_.size();}
 
 public:
-    ocmbase(unsigned np, unsigned nh=10, unsigned seedseed=137, bool conservative = false):
+    ocmbase(std::string file, unsigned np, unsigned nh=10, unsigned seedseed=137, int core_s=0, bool conservative = false):
         np_(np),
         nh_(nh),
+        core_size(core_s),
         mask_((1ull << np_) - 1),
         seedseed_(seedseed),
         hf_(nh_, seedseed),
         conservative_(conservative)
         {
+           //std::cout<<"nh  "<<nh_<<std::endl;
             //assert(hf_.size() == nh_);
+            output_file=file;
             nh_ += (nh % 2 == 0);
+            //std::cout<<"nh  "<<nh_<<std::endl;
             core_.resize(nh_ << np_);
+            core_size = core_.size();
             //POST_REQ(core_.size() == (nh_ << np_), "core must be properly sized");            //for throwing exception
             collision_.resize(nh_ << np_);
             for(int i=0;i<collision_.size(); i++) collision_[i] = 0;
@@ -126,11 +133,65 @@ public:
             while(seeds_.size() < static_cast<unsigned>(nh_)) seeds_.emplace_back(mt());
         }
 
+
     void clear_core(){
         core_.clear();
         core_.shrink_to_fit();
         core_.resize(nh_ << np_);
     }
+
+
+    void save_core_and_collision()
+    {
+    //std::cout<<"sameeeee"<<core_size<<" "<<collision_size<<std::endl;;
+        //std::cout<<std::endl<<core_.size()<<std::endl<<std::endl;
+            std::ofstream outputFile;
+            outputFile.open(output_file, std::ios::out | std::ios::binary);
+
+       /// Write Binary File ////
+       if(outputFile.is_open())
+       {
+          // std::cout<<"np:   "<<nh_<<std::endl;
+       char true_= '1', false_ = '0';
+            outputFile.write(reinterpret_cast<char*>(&np_), sizeof(np_));
+           outputFile.write(reinterpret_cast<char*>(&nh_), sizeof(nh_));
+         //  outputFile.write(reinterpret_cast<char*>(&mask_), sizeof(mask_));
+           outputFile.write(reinterpret_cast<char*>(&seedseed_), sizeof(seedseed_));
+           if(conservative_==true) outputFile.write(reinterpret_cast<char*>(&true_), sizeof(true_));
+           else outputFile.write(reinterpret_cast<char*>(&false_), sizeof(false_));
+            int size_core_ = core_.size();
+            outputFile.write(reinterpret_cast<char*>(&size_core_), sizeof(size_core_));
+            //int size_collision_ = collision_.size();
+            //outputFile.write(reinterpret_cast<char*>(&size_collision_), sizeof(size_collision_));
+            for(unsigned i = 0; i < core_.size(); i++){
+                    //outputFile.write(reinterpret_cast<char*>(&core_[i]), sizeof(CounterType));
+                    //outputFile<<core_[i];
+                    //std::cout<<sizeof(int32_t)<<std::endl<<std::endl;
+                    outputFile.write(reinterpret_cast<char*>(&core_[i]), sizeof(core_[i]));
+                  // if(i<=15) std::cout<<core_[i]<<std::endl;
+            }
+            for(unsigned i = 0; i < collision_.size(); i++){
+                    //std::cout<<sizeof(int)<<std::endl<<std::endl;
+                   // outputFile.write(reinterpret_cast<char*>(&collision_[i]), sizeof(CounterType));
+                   // std::cout<<collision_[i]<<std::endl;
+                    outputFile.write(reinterpret_cast<char*>(&collision_[i]), sizeof(collision_[i]));
+
+            }
+            for(unsigned i = 0; i < seeds_.size(); i++){
+                    //std::cout<<sizeof(int)<<std::endl<<std::endl;
+                   // outputFile.write(reinterpret_cast<char*>(&collision_[i]), sizeof(CounterType));
+                  // std::cout<<sizeof(seeds_[i])<<std::endl;
+                    outputFile.write(reinterpret_cast<char*>(&seeds_[i]), sizeof(seeds_[i]));
+
+            }
+
+            outputFile.close();
+       }
+
+
+
+    }
+
 
     void update_count(uint64_t val) {                       // update count function
         std::vector<CounterType> counts(nh_);
@@ -261,7 +322,7 @@ public:
         }
     }
 
-    CounterType est_count(uint64_t val) const {
+     CounterType est_count(uint64_t val) const {
         std::vector<CounterType> counts(nh_);
         std::vector<u_int64_t> pos(nh_);
         auto cptr = counts.data();                       //cptr points to the beginning of counts_ vector
@@ -304,6 +365,82 @@ public:
         }
         std::cout<<std::endl;
     }
+    void show_data()
+    {
+        std::cout<<np_<<std::endl<<nh_<<std::endl<<mask_<<std::endl<<seedseed_<<std::endl<<conservative_<<std::endl<<core_size<<std::endl;;
+        //for(int i=0; i<10; i++)
+          //  std::cout<<this->get_nth_collision(output_file,i)<<std::endl;
+
+    }
+
+
+
+    void load_core(std::string output_file)
+    {
+    //std::cout<<"sameeeee"<<core_size<<" "<<collision_size<<std::endl;;
+        std::ifstream outputFile;
+        outputFile.open(output_file, std::ios::in | std::ios::binary);
+        if(outputFile.is_open())
+       {
+       outputFile.seekg(sizeof(uint32_t)*2 + sizeof(uint64_t) + sizeof(char) + sizeof(int), std::ios::beg);
+           for(uint32_t i=0; i<core_size; i++)
+           {
+                outputFile.read(reinterpret_cast<char *>(&core_[i]), sizeof(core_[i]));
+                //std::cout<<core_[i]<<std::endl;
+
+           }
+
+        outputFile.close();
+       }
+
+    }
+    void load_collision(std::string output_file)
+    {
+        std::ifstream outputFile;
+        outputFile.open(output_file, std::ios::in | std::ios::binary);
+        if(outputFile.is_open())
+       {
+       outputFile.seekg(sizeof(uint32_t)*2 + sizeof(uint64_t) + sizeof(char) + sizeof(int) + 8*core_size, std::ios::beg);
+           for(uint32_t i=0; i<core_size; i++)
+           {
+                outputFile.read(reinterpret_cast<char *>(&collision_[i]), sizeof(collision_[i]));
+               // std::cout<<collision_[i]<<std::endl;
+
+           }
+
+        outputFile.close();
+       }
+
+    }
+    void load_seed(std::string output_file)
+    {
+        std::mt19937_64 mt(seedseed_ + 4);
+        while(seeds_.size() < static_cast<unsigned>(nh_)) seeds_.emplace_back(mt());
+
+    }
+    void show_core(uint32_t n) const
+    {
+
+           for(uint32_t i=0; i<n; i++)
+           {
+                std::cout<<core_[i]<<std::endl;
+
+           }
+
+
+    }
+    void load_from_sketch(std::string input_file)
+    {
+        //this->load_data(input_file);
+        this->load_core(input_file);
+        this->load_collision(input_file);
+        this->load_seed(input_file);
+
+    }
+    uint32_t get_core_size(){return core_.size();}
+    uint32_t get_collision_size(){return collision_.size();}
+
+
 
 };
 

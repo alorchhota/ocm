@@ -1,6 +1,8 @@
-#include <bits/stdc++.h>
+#include <iostream>
+#include <vector>
+#include <fstream>
 #include "hash.h"
-
+#include "compact_vector/compact_vector.hpp"
 
 
 namespace sketch {
@@ -38,16 +40,15 @@ public:
             //POST_REQ(core_.size() == (nh_ << np_), "core must be properly sized");            //for throwing exception
             std::mt19937_64 mt(seedseed_ + 4);
             while(seeds_.size() < static_cast<unsigned>(nh_)) seeds_.emplace_back(mt());
-            //clear();
         }
 
     void update_count(uint64_t val) {
-        std::vector<CounterType> counts(nh_);
-        std::vector<u_int64_t> pos(nh_);
-        auto cptr = counts.data();                       //cptr points to the beginning of counts_ vector
+        //std::vector<CounterType> counts(nh_);
+        std::vector<uint64_t> pos(nh_);
+        //auto cptr = counts.data();                       //cptr points to the beginning of counts_ vector
         for(unsigned added = 0; added < nh_; added++){
             CounterType hv = hf_(val ^ seeds_[added]);
-            cptr[added] = hv;               //counts vector now contains hash values
+            //cptr[added] = hv;               //counts vector now contains hash values
             pos[added] = (hv & mask_) + (added << np_);   // exact positions where we will increase the counter by one.
         }
 
@@ -68,22 +69,19 @@ public:
     }
 
     CounterType est_count(uint64_t val) const {
-        std::vector<CounterType> counts(nh_);
-        std::vector<u_int64_t> pos(nh_);
-        auto cptr = counts.data();                       //cptr points to the beginning of counts_ vector
+        //std::vector<CounterType> counts(nh_);
+        std::vector<uint64_t> pos(nh_);
+        //auto cptr = counts.data();                       //cptr points to the beginning of counts_ vector
         for(unsigned added = 0; added < nh_; added++){
             CounterType hv = hf_(val ^ seeds_[added]);
-            cptr[added] = hv;               //counts vector now contains hash values
+            //cptr[added] = hv;               //counts vector now contains hash values
             pos[added] = (hv & mask_) + (added << np_);   // exact positions where we will increase the counter by one.
         }
 
         CounterType min_count = std::numeric_limits<CounterType>::max();
-        //std::cout<<"Counters for val "<<val<<": ";
         for(int i=0; i< nh_; i++){
-            //std::cout<<core_[pos[i]]<<" ";
             min_count = (std::min<CounterType>)(core_[pos[i]], min_count);
         }
-        //std::cout<<std::endl;
         return min_count;
         }
 };
@@ -92,47 +90,38 @@ public:
 //old work ends
 
 // Base for Offline Count min Sketch
-template<typename CounterType=int32_t , typename HashStruct = WangHash >
+template<typename CounterType=int32_t , typename HashStruct = WangHash , unsigned int BitSize = 4>
 class ocmbase{
     std::vector<CounterType, allocator<CounterType>> core_;     //resisters of the hash table
-    std::vector<int> collision_;
-    int core_size;                              // will keep track of collision after each round
+    //compact::vector<unsigned int, BitSize> collision_;                                // will keep track of collision after each round
+    std::vector<unsigned int> collision_;
     uint32_t np_;                                               // no of column (W) is 2^np_
     uint32_t nh_;                                               // number of hash functions
     uint64_t mask_;                                             // and-ing a number with mask will give X mod W
     uint64_t seedseed_;
-    bool conservative_;
     const HashStruct hf_;
-    std::string output_file;
     std::vector<uint64_t, allocator<uint64_t>> seeds_;
     CounterType       *data()       {return core_.data();}     //data is a pointer to a function
     const CounterType *data() const {return core_.data();}
     size_t size() const {return core_.size();}
 
 public:
-    ocmbase(std::string file, unsigned np, unsigned nh=10, unsigned seedseed=137, int core_s=0, bool conservative = false):
+    ocmbase(unsigned np, unsigned nh=10, unsigned seedseed=137):
         np_(np),
         nh_(nh),
-        core_size(core_s),
         mask_((1ull << np_) - 1),
-        seedseed_(seedseed),
-        hf_(nh_, seedseed),
-        conservative_(conservative)
+        seedseed_(seedseed)
         {
-           //std::cout<<"nh  "<<nh_<<std::endl;
             //assert(hf_.size() == nh_);
-            output_file=file;
             nh_ += (nh % 2 == 0);
-            //std::cout<<"nh  "<<nh_<<std::endl;
             core_.resize(nh_ << np_);
-            core_size = core_.size();
             //POST_REQ(core_.size() == (nh_ << np_), "core must be properly sized");            //for throwing exception
             collision_.resize(nh_ << np_);
+            //std::cout<<"Collision DEBUG: \nBitSize= "<<BitSize<<" "<<sizeof(collision_[0])<<"\n";
             for(int i=0;i<collision_.size(); i++) collision_[i] = 0;
             std::mt19937_64 mt(seedseed_ + 4);
             while(seeds_.size() < static_cast<unsigned>(nh_)) seeds_.emplace_back(mt());
         }
-
 
     void clear_core(){
         core_.clear();
@@ -140,111 +129,43 @@ public:
         core_.resize(nh_ << np_);
     }
 
-
-    void save_core_and_collision()
-    {
-    //std::cout<<"sameeeee"<<core_size<<" "<<collision_size<<std::endl;;
-        //std::cout<<std::endl<<core_.size()<<std::endl<<std::endl;
-            std::ofstream outputFile;
-            outputFile.open(output_file, std::ios::out | std::ios::binary);
-
-       /// Write Binary File ////
-       if(outputFile.is_open())
-       {
-          // std::cout<<"np:   "<<nh_<<std::endl;
-       char true_= '1', false_ = '0';
-            outputFile.write(reinterpret_cast<char*>(&np_), sizeof(np_));
-           outputFile.write(reinterpret_cast<char*>(&nh_), sizeof(nh_));
-         //  outputFile.write(reinterpret_cast<char*>(&mask_), sizeof(mask_));
-           outputFile.write(reinterpret_cast<char*>(&seedseed_), sizeof(seedseed_));
-           if(conservative_==true) outputFile.write(reinterpret_cast<char*>(&true_), sizeof(true_));
-           else outputFile.write(reinterpret_cast<char*>(&false_), sizeof(false_));
-            int size_core_ = core_.size();
-            outputFile.write(reinterpret_cast<char*>(&size_core_), sizeof(size_core_));
-            //int size_collision_ = collision_.size();
-            //outputFile.write(reinterpret_cast<char*>(&size_collision_), sizeof(size_collision_));
-            for(unsigned i = 0; i < core_.size(); i++){
-                    //outputFile.write(reinterpret_cast<char*>(&core_[i]), sizeof(CounterType));
-                    //outputFile<<core_[i];
-                    //std::cout<<sizeof(int32_t)<<std::endl<<std::endl;
-                    outputFile.write(reinterpret_cast<char*>(&core_[i]), sizeof(core_[i]));
-                  // if(i<=15) std::cout<<core_[i]<<std::endl;
-            }
-            for(unsigned i = 0; i < collision_.size(); i++){
-                    //std::cout<<sizeof(int)<<std::endl<<std::endl;
-                   // outputFile.write(reinterpret_cast<char*>(&collision_[i]), sizeof(CounterType));
-                   // std::cout<<collision_[i]<<std::endl;
-                    outputFile.write(reinterpret_cast<char*>(&collision_[i]), sizeof(collision_[i]));
-
-            }
-            for(unsigned i = 0; i < seeds_.size(); i++){
-                    //std::cout<<sizeof(int)<<std::endl<<std::endl;
-                   // outputFile.write(reinterpret_cast<char*>(&collision_[i]), sizeof(CounterType));
-                  // std::cout<<sizeof(seeds_[i])<<std::endl;
-                    outputFile.write(reinterpret_cast<char*>(&seeds_[i]), sizeof(seeds_[i]));
-
-            }
-
-            outputFile.close();
-       }
-
-
-
-    }
-
-
     void update_count(uint64_t val) {                       // update count function
-        std::vector<CounterType> counts(nh_);
-        std::vector<u_int64_t> pos(nh_);
-        auto cptr = counts.data();                       //cptr points to the beginning of counts_ vector
+        int min_collision = std::numeric_limits<int>::max();
+        //std::vector<CounterType> counts(nh_);
+        std::vector<uint64_t> pos(nh_);
+        //auto cptr = counts.data();                       //cptr points to the beginning of counts_ vector
+        // map kmers to counters + find min collision
         for(unsigned added = 0; added < nh_; added++){
             CounterType hv = hf_(val ^ seeds_[added]);
-            cptr[added] = hv;               //counts vector now contains hash values
+            //cptr[added] = hv;               //counts vector now contains hash values
             pos[added] = (hv & mask_) + (added << np_);   // exact positions where we will increase the counter by one.
+            min_collision = std::min(min_collision, (int)collision_[pos[added]]);
         }
 
-        int min_collision = std::numeric_limits<int>::max();
-        for(unsigned added = 0; added < nh_; added++){
-            min_collision = std::min(min_collision, collision_[pos[added]]);
-        }
-        //std::cout<<"DEBUG "<<"min collision is : "<<min_collision<<std::endl;
         for(unsigned added = 0; added < nh_; added++){
             if( collision_[pos[added]] == min_collision) core_[pos[added]]++;
-            //else std::cout<<"Collision Deceted while updating"<<std::endl;
         }
     }
 
     void update_count_collision(uint64_t val, int current_round, int total_round){
-        std::vector<CounterType> counts(nh_);
-        std::vector<u_int64_t> pos(nh_);
-        auto cptr = counts.data();                       //cptr points to the beginning of counts_ vector
+        //std::vector<CounterType> counts(nh_);
+        int min_collision = std::numeric_limits<int>::max();
+        std::vector<uint64_t> pos(nh_);
+        //auto cptr = counts.data();                       //cptr points to the beginning of counts_ vector
         for(unsigned added = 0; added < nh_; added++){
             CounterType hv = hf_(val ^ seeds_[added]);
-            cptr[added] = hv;               //counts vector now contains hash values
+            //cptr[added] = hv;               //counts vector now contains hash values
             pos[added] = (hv & mask_) + (added << np_);   // exact positions where we will increase the counter by one.
+            min_collision = std::min(min_collision, (int)collision_[pos[added]]);
         }
-
-        // get smallest collision round among counters
-        int min_collision = std::numeric_limits<int>::max();
-        for(unsigned added = 0; added < nh_; added++){
-            min_collision = std::min(min_collision, collision_[pos[added]]);
-        }
-//        // DeBUG CODE
-//        if(val == 268931867597u){
-//            std::cout<<"\nBefore updating: \n";
-//            std::cout<<core_[pos[0]]<<" "<<core_[pos[1]]<<" "<<core_[pos[2]]<<" "<<core_[pos[3]]<<" "<<core_[pos[4]]<<" "<<core_[pos[5]]<<" "<<core_[pos[6]]<<" "<<core_[pos[7]]<<" "<<core_[pos[8]]<<" "<<core_[pos[9]]<<" "<<core_[pos[10]]<<" \n";
-//            std::cout<<collision_[pos[0]]<<" "<<collision_[pos[1]]<<" "<<collision_[pos[2]]<<" "<<collision_[pos[3]]<<" "<<collision_[pos[4]]<<" "<<collision_[pos[5]]<<" "<<collision_[pos[6]]<<" "<<collision_[pos[7]]<<" "<<collision_[pos[8]]<<" "<<collision_[pos[9]]<<" "<<collision_[pos[10]]<<" \n";
-//            std::cout<<"DEBUG round: "<<round<<" min collision is : "<<min_collision<<std::endl;
-//        }
-//        // END DEBUG CODE
 
         if(min_collision < current_round - 1){
-            //if(val == 268931867597u) std::cout<<" # >= 1 cell without collision in prev round\n";
+            // #>=1 cell without collision in prev round
             CounterType min_count = std::numeric_limits<int>::max();
             for(unsigned added=0; added< nh_; added++){
                 if(collision_[pos[added]] == min_collision) min_count = std::min(min_count, core_[pos[added]]);
             }
-            //if(val == 268931867597u) std::cout<<"min-count is "<<min_count<<std::endl;
+
             for(unsigned added=0; added< nh_; added++){
                 if(collision_[pos[added]] == min_collision){
                     // c[i,j] = min(C[i,j]+1, min_count)        Changed code from paper
@@ -256,14 +177,11 @@ public:
         }
 
         else{
-            //if(val == 268931867597u) std::cout<<" every cell has a collision in the prev round\n";
+            // every cell has a collision in the prev round
             CounterType min_count = std::numeric_limits<int>::max();
             for(unsigned added=0; added< nh_; added++){
                 min_count = std::min(min_count, core_[pos[added]]);
             }
-//            if(val == 268931867597u){
-//                std::cout<<"min-count is "<<min_count<<std::endl;
-//            }
 
             for(unsigned added=0; added< nh_; added++){
                 if(current_round < total_round && core_[pos[added]] > min_count){
@@ -271,41 +189,28 @@ public:
                 }
                 // Changed Code from paper
                 //core_[pos[added]] = std::min( core_[pos[added]] + 1, min_count);
-
                 if(core_[pos[added]] == min_count){
                     core_[pos[added]] = min_count + 1;
                 }
             }
-
         }
-//        // DeBUG CODE
-//        if(val == 268931867597u){
-//            std::cout<<"\nAfter updating: \n";
-//            std::cout<<core_[pos[0]]<<" "<<core_[pos[1]]<<" "<<core_[pos[2]]<<" "<<core_[pos[3]]<<" "<<core_[pos[4]]<<" "<<core_[pos[5]]<<" "<<core_[pos[6]]<<" "<<core_[pos[7]]<<" "<<core_[pos[8]]<<" "<<core_[pos[9]]<<" "<<core_[pos[10]]<<" \n";
-//            std::cout<<collision_[pos[0]]<<" "<<collision_[pos[1]]<<" "<<collision_[pos[2]]<<" "<<collision_[pos[3]]<<" "<<collision_[pos[4]]<<" "<<collision_[pos[5]]<<" "<<collision_[pos[6]]<<" "<<collision_[pos[7]]<<" "<<collision_[pos[8]]<<" "<<collision_[pos[9]]<<" "<<collision_[pos[10]]<<" \n";
-//        }
-//        // END DEBUG CODE
-
     }
 
     void update_collision(uint64_t val, int round){
-        std::vector<CounterType> counts(nh_);
-        std::vector<u_int64_t> pos(nh_);
-        auto cptr = counts.data();                       //cptr points to the beginning of counts_ vector
+        //std::vector<CounterType> counts(nh_);
+        // map kmer to counter and find min collision
+        int min_collision = std::numeric_limits<int>::max();
+        std::vector<uint64_t> pos(nh_);
+        //auto cptr = counts.data();                       //cptr points to the beginning of counts_ vector
         for(unsigned added = 0; added < nh_; added++){
             CounterType hv = hf_(val ^ seeds_[added]);
-            cptr[added] = hv;                             //counts vector now contains hash values
+            //cptr[added] = hv;                             //counts vector now contains hash values
             pos[added] = (hv & mask_) + (added << np_);   // exact positions where we will increase the counter by one.
+            min_collision = std::min(min_collision, (int)collision_[pos[added]]);
         }
 
-        int min_collision = std::numeric_limits<int>::max();
-        for(unsigned added = 0; added < nh_; added++){
-            min_collision = std::min(min_collision, collision_[pos[added]]);
-        }
-        //std::cout<<"DEBUG "<<"min collision is : "<<min_collision<<std::endl;
 
         if (min_collision >= round-2){
-            //std::cout<<"Came to update collision"<<std::endl;
             // find min-count
             CounterType min_count = std::numeric_limits<CounterType>::max();
             for(unsigned added = 0; added < nh_; added++){
@@ -315,34 +220,29 @@ public:
             for(unsigned added = 0; added < nh_; added++){
                 if (core_[pos[added]] > min_count){
                     collision_[pos[added]] = round - 1;
-                    //std::cout<<"Collision Detected"<<std::endl;
                 }
-
             }
         }
     }
 
-     CounterType est_count(uint64_t val) const {
-        std::vector<CounterType> counts(nh_);
-        std::vector<u_int64_t> pos(nh_);
-        auto cptr = counts.data();                       //cptr points to the beginning of counts_ vector
+    CounterType est_count(uint64_t val) const {
+        //std::vector<CounterType> counts(nh_);
+        int min_collision = std::numeric_limits<int>::max();
+        std::vector<uint64_t> pos(nh_);
+        //auto cptr = counts.data();                       //cptr points to the beginning of counts_ vector
+        // map kmers and find min collision
         for(unsigned added = 0; added < nh_; added++){
             CounterType hv = hf_(val ^ seeds_[added]);
-            cptr[added] = hv;               //counts vector now contains hash values
+            //cptr[added] = hv;               //counts vector now contains hash values
             pos[added] = (hv & mask_) + (added << np_);   // exact positions where we will increase the counter by one.
+            min_collision = std::min(min_collision, (int)collision_[pos[added]]);
         }
 
         CounterType min_count = std::numeric_limits<CounterType>::max();
 
-        int min_collision = std::numeric_limits<int>::max();
+        // min count with smallest collision number
         for(unsigned added = 0; added < nh_; added++){
-            min_collision = std::min(min_collision, collision_[pos[added]]);
-        }
-        //std::cout<<"DEBUG "<<"min collision is : "<<min_collision<<std::endl;
-        //std::cout<<"Estimate function is called\n";
-        //this->showCounters(val);
-        for(unsigned added = 0; added < nh_; added++){
-            if( collision_[pos[added]] == min_collision) min_count = core_[pos[added]];
+            if( collision_[pos[added]] == min_collision) min_count = std::min(min_count,core_[pos[added]]);
         }
         return min_count;
     }
@@ -365,82 +265,50 @@ public:
         }
         std::cout<<std::endl;
     }
-    void show_data()
-    {
-        std::cout<<np_<<std::endl<<nh_<<std::endl<<mask_<<std::endl<<seedseed_<<std::endl<<conservative_<<std::endl<<core_size<<std::endl;;
-        //for(int i=0; i<10; i++)
-          //  std::cout<<this->get_nth_collision(output_file,i)<<std::endl;
 
-    }
-
-
-
-    void load_core(std::string output_file)
-    {
-    //std::cout<<"sameeeee"<<core_size<<" "<<collision_size<<std::endl;;
-        std::ifstream outputFile;
-        outputFile.open(output_file, std::ios::in | std::ios::binary);
-        if(outputFile.is_open())
-       {
-       outputFile.seekg(sizeof(uint32_t)*2 + sizeof(uint64_t) + sizeof(char) + sizeof(int), std::ios::beg);
-           for(uint32_t i=0; i<core_size; i++)
-           {
-                outputFile.read(reinterpret_cast<char *>(&core_[i]), sizeof(core_[i]));
-                //std::cout<<core_[i]<<std::endl;
-
-           }
-
-        outputFile.close();
-       }
-
-    }
-    void load_collision(std::string output_file)
-    {
-        std::ifstream outputFile;
-        outputFile.open(output_file, std::ios::in | std::ios::binary);
-        if(outputFile.is_open())
-       {
-       outputFile.seekg(sizeof(uint32_t)*2 + sizeof(uint64_t) + sizeof(char) + sizeof(int) + 8*core_size, std::ios::beg);
-           for(uint32_t i=0; i<core_size; i++)
-           {
-                outputFile.read(reinterpret_cast<char *>(&collision_[i]), sizeof(collision_[i]));
-               // std::cout<<collision_[i]<<std::endl;
-
-           }
-
-        outputFile.close();
-       }
-
-    }
-    void load_seed(std::string output_file)
-    {
-        std::mt19937_64 mt(seedseed_ + 4);
-        while(seeds_.size() < static_cast<unsigned>(nh_)) seeds_.emplace_back(mt());
-
-    }
-    void show_core(uint32_t n) const
-    {
-
-           for(uint32_t i=0; i<n; i++)
-           {
-                std::cout<<core_[i]<<std::endl;
-
-           }
-
-
-    }
-    void load_from_sketch(std::string input_file)
-    {
+    void load_from_sketch(std::string input_file_name){
         //this->load_data(input_file);
-        this->load_core(input_file);
-        this->load_collision(input_file);
-        this->load_seed(input_file);
+        //this->load_core(input_file);
+        std::ifstream input_file;
+        input_file.open(input_file_name, std::ios::in | std::ios::binary);
+        if(input_file.is_open()){
+            input_file.seekg(sizeof(uint32_t)*2 + sizeof(uint64_t), std::ios::beg);            //future work
+            for(uint32_t i=0; i< (nh_<<np_) ; i++){
+                input_file.read(reinterpret_cast<char *>(&core_[i]), sizeof(core_[i]));
+                //std::cout<<core_[i]<<std::endl;
+            }
+            for(uint32_t i=0; i< (nh_<<np_); i++){
+                input_file.read(reinterpret_cast<char *>(&collision_[i]), sizeof(collision_[i]));
+               // std::cout<<collision_[i]<<std::endl;
+            }
+        }
 
     }
-    uint32_t get_core_size(){return core_.size();}
-    uint32_t get_collision_size(){return collision_.size();}
 
+    // output starts
+    void save_sketch(std::string output_file_name){
+        std::ofstream outputfile;
+        outputfile.open(output_file_name, std::ios::out | std::ios::binary);
 
+        // Write Binary File //
+        if(outputfile.is_open()){
+            // std::cout<<"np:   "<<nh_<<std::endl;
+            //char true_= '1', false_ = '0';
+            outputfile.write(reinterpret_cast<char*>(&np_), sizeof(np_));
+            outputfile.write(reinterpret_cast<char*>(&nh_), sizeof(nh_));
+            outputfile.write(reinterpret_cast<char*>(&seedseed_), sizeof(seedseed_));
+//            if(conservative_==true) outputFile.write(reinterpret_cast<char*>(&true_), sizeof(true_));
+//            else outputFile.write(reinterpret_cast<char*>(&false_), sizeof(false_));
+            for(unsigned i = 0; i < core_.size(); i++){
+                outputfile.write(reinterpret_cast<char*>(&core_[i]), sizeof(core_[i]));
+            }
+            for(unsigned i = 0; i < collision_.size(); i++){
+                outputfile.write(reinterpret_cast<char*>(&collision_[i]), sizeof(collision_[i]));
+            }
+            outputfile.close();
+        }
+    }
+    // output ends
 
 };
 

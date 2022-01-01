@@ -8,14 +8,14 @@ uint64_t reverse_compliment(uint64_t cal_kmer, int kmer_length);
 template <typename ccmbase_obj> void update_count_from_file(string file, int len_k_mer, ccmbase_obj &ccmbase_obj_name);
 template <typename ccmbase_obj> void update_collision_from_file(string file, int len_k_mer, ccmbase_obj &ccmbase_obj_name, int round);
 template <typename ccmbase_obj> void update_count_collision_from_file(string file, int len_k_mer, ccmbase_obj &ccmbase_obj_name, int round, int total_round);
-clock_t start_time,end_time;
+clock_t start_time,end_time,total_time;
 
 string sample_kmer="AAACCGGTCTGTTGGGACCACT";  // len = 22
 string INPUT_FASTA_FILE = "",OUTPUT_SKETCH_FILE="";   //  "rymv.sim.fa"; //
 unsigned int kmer_len = 0;
 int counter=0;
 unsigned int NP = 20, NH = 7, TOTAL_ROUND = 4,SEED=137, counter_w,num_threads;
-bool CANONICALIZE = false, CONSERVATIVE = false;
+bool CANONICALIZE = true, CONSERVATIVE = false;
 
 int main(int argc, char *argv[]){
     string mode(argv[1]);
@@ -30,7 +30,7 @@ int main(int argc, char *argv[]){
             else if(arg=="-t") num_threads=stoi(argv[++i]);
             else if(arg=="-o") OUTPUT_SKETCH_FILE = argv[++i];
             else if(arg=="-fa") INPUT_FASTA_FILE=argv[++i];
-            else if(arg=="-r") CANONICALIZE = true;
+            else if(arg=="-r") CANONICALIZE = false;
             else if(arg=="-c") CONSERVATIVE = true;
         }
         if(kmer_len <= 0 || INPUT_FASTA_FILE=="" || OUTPUT_SKETCH_FILE==""){
@@ -40,6 +40,7 @@ int main(int argc, char *argv[]){
         //cout<<NP<<" "<<NH<<" "<<TOTAL_ROUND<<" "<<OUTPUT_SKETCH_FILE<<" "<<INPUT_FASTA_FILE<<" "<<CANONICALIZE<<" ";
         if(!CONSERVATIVE){
             //construct OCM
+            total_time = clock();
             sketch::ocm::ocmbase <uint64_t, sketch::hash::WangHash,2> sketch1(NP,NH,137);
             for(int r = 0; r< TOTAL_ROUND; r++){
                 if (r > 0){
@@ -47,7 +48,7 @@ int main(int argc, char *argv[]){
                     start_time = clock();
                     update_collision_from_file(INPUT_FASTA_FILE,kmer_len,sketch1,r);
                     end_time = clock();
-                    cout<<"Updating collision for oms round "<<r<<" is completed in "<<(double)(end_time - start_time)/CLOCKS_PER_SEC<<" seconds\n";
+                    cout<<"Updating collision for ocms round "<<r<<" is completed in "<<(double)(end_time - start_time)/CLOCKS_PER_SEC<<" seconds\n";
                 }
 
                 sketch1.clear_core();
@@ -55,14 +56,16 @@ int main(int argc, char *argv[]){
                 start_time = clock();
                 update_count_from_file(INPUT_FASTA_FILE,kmer_len,sketch1);
                 end_time = clock();
-                cout<<"Updating count for oms round "<<r<<" is completed in "<<(double)(end_time - start_time)/CLOCKS_PER_SEC<<" seconds\n";
+                cout<<"Updating count for ocms round "<<r<<" is completed in "<<(double)(end_time - start_time)/CLOCKS_PER_SEC<<" seconds\n";
                 //sketch1.showCounters(cal(sample_kmer));
             }
+            cout<<"Constructing ocms is completed in :"<<(double)(clock()-total_time)/CLOCKS_PER_SEC<<" seconds\n";
             //end construct OCM
             sketch1.save_sketch(OUTPUT_SKETCH_FILE);
         }
         else{
         //construct occm
+        total_time = clock();
         sketch::ocm::ocmbase <uint64_t, sketch::hash::WangHash,2> sketch2(NP,NH,137);
         for(int r = 0; r< TOTAL_ROUND; r++){
             if (r > 0){
@@ -70,7 +73,7 @@ int main(int argc, char *argv[]){
                 clock_t start_time = clock();
                 update_collision_from_file(INPUT_FASTA_FILE,kmer_len,sketch2,r);
                 clock_t end_time = clock();
-                cout<<"Updating collision for ocms round "<<r<<" is completed in "<<(double)(end_time - start_time)/CLOCKS_PER_SEC<<" seconds\n";
+                cout<<"Updating collision for occms round "<<r<<" is completed in "<<(double)(end_time - start_time)/CLOCKS_PER_SEC<<" seconds\n";
             }
             sketch2.clear_core();
             // for all kmer update count collision
@@ -78,11 +81,13 @@ int main(int argc, char *argv[]){
             //for(auto kmer: kmers_vec) sketch2.update_count_collision(kmer,r,TOTAL_ROUND);
             update_count_collision_from_file(INPUT_FASTA_FILE,kmer_len,sketch2,r,TOTAL_ROUND);
             end_time = clock();
-            cout<<"Updating count-collision for ocms round "<<r<<" is completed in "<<(double)(end_time - start_time)/CLOCKS_PER_SEC<<" seconds\n";
+            cout<<"Updating count-collision for occms round "<<r<<" is completed in "<<(double)(end_time - start_time)/CLOCKS_PER_SEC<<" seconds\n";
             //sketch2.showCounters(cal(sample_kmer));
-            sketch2.save_sketch(OUTPUT_SKETCH_FILE);
+
         }
         //end occm
+        cout<<"Constructing occm is completed in :"<<(double)(clock()-total_time)/CLOCKS_PER_SEC<<" seconds\n";
+        sketch2.save_sketch(OUTPUT_SKETCH_FILE);
         }
     }
     if (mode == "query"){
@@ -114,12 +119,16 @@ int main(int argc, char *argv[]){
         sketch::ocm::ocmbase <uint64_t, sketch::hash::WangHash,2> query_sketch(NP,NH,SEED);
         query_sketch.load_from_sketch(input_sketch_name);
         ifstream infile(query_file_name);
+        if(!infile.good()){cout<<"Couldn't open input query file\n";}
         string kmer;
+        int true_count;
         ofstream query_result_file;
         query_result_file.open(query_result_file_name, ios::out);
-        while (infile >> kmer){
-            //cout<<kmer<<" estimated_count "<<query_sketch.est_count(cal(kmer))<<endl;
-            query_result_file <<kmer<<","<<query_sketch.est_count(cal(kmer))<<endl;
+        if(!query_result_file.good()){cout<<"Couldn't open output query file file\n";}
+        query_result_file<<"kmer,true_count,estimated_count\n";
+        while (infile >> kmer >> true_count){
+            //cout<<kmer<<","<<true_count<<","<<query_sketch.est_count(cal(kmer))<<endl;
+            query_result_file <<kmer<<","<<true_count<<","<<query_sketch.est_count(cal(kmer))<<endl;
         }
     }
     return 0;

@@ -269,8 +269,7 @@ public:
     }
 
     void load_from_sketch(std::string input_file_name){
-        //this->load_data(input_file);
-        //this->load_core(input_file);
+        std::cout<<"loading data from sketch file------\n";
         std::ifstream input_file;
         input_file.open(input_file_name, std::ios::in | std::ios::binary);
         if(input_file.is_open()){
@@ -279,47 +278,46 @@ public:
                 input_file.read(reinterpret_cast<char *>(&core_[i]), sizeof(core_[i]));
                 //std::cout<<core_[i]<<std::endl;
             }
+            std::cout<<"core is read from sketch file------"<<std::endl;
             for(uint32_t i=0; i< (nh_<<np_); i++){
-                //int temp;
-                //input_file.read(reinterpret_cast<char *>(temp), sizeof(int));
-                input_file.read(reinterpret_cast<char *>(&collision_[i]), sizeof(collision_[i]));
-                //collision_[i]=temp;
-                
-               // std::cout<<collision_[i]<<std::endl;
+                int temp;
+                input_file.read(reinterpret_cast<char *>(&temp), sizeof(temp));
+                collision_[i]=temp;
+                //input_file.read(reinterpret_cast<char *>(&collision_[i]), sizeof(collision_[i]));
             }
         }
+        std::cout<<"loading from sketch file is complete------\n";
 
     }
 
     // output starts
     void save_sketch(std::string output_file_name){
+        std::cout<<"saving sketch------\n";
         std::ofstream outputfile;
         outputfile.open(output_file_name, std::ios::out | std::ios::binary);
-
         // Write Binary File //
         if(outputfile.is_open()){
-            // std::cout<<"np:   "<<nh_<<std::endl;
-            //char true_= '1', false_ = '0';
             outputfile.write(reinterpret_cast<char*>(&np_), sizeof(np_));
             outputfile.write(reinterpret_cast<char*>(&nh_), sizeof(nh_));
             outputfile.write(reinterpret_cast<char*>(&seedseed_), sizeof(seedseed_));
-//            if(conservative_==true) outputFile.write(reinterpret_cast<char*>(&true_), sizeof(true_));
-//            else outputFile.write(reinterpret_cast<char*>(&false_), sizeof(false_));
+
+
             for(unsigned i = 0; i < core_.size(); i++){
                 outputfile.write(reinterpret_cast<char*>(&core_[i]), sizeof(core_[i]));
             }
+            std::cout<<"core is saved------\n";
             for(unsigned i = 0; i < collision_.size(); i++){
-                //int temp = collision_[i];
-                //std::cout<<temp<<std::endl;
-                //outputfile.write(reinterpret_cast<char*>(temp), sizeof(int));
-                outputfile.write(reinterpret_cast<char*>(&collision_[i]), sizeof(collision_[i]));
+                int temp = collision_[i];
+                outputfile.write(reinterpret_cast<char*>(&temp), sizeof(temp));
+                //outputfile.write(reinterpret_cast<char*>(&collision_[i]), sizeof(collision_[i]));
             }
             outputfile.close();
         }
+        std::cout<<"Sketch is saved------\n";
     }
     // output ends
-    
-    
+
+
     int64_t process_first_kmer(int& start, int len_kmer, char arr_kmer[])
     {
         int64_t k_mer = 0;
@@ -386,7 +384,7 @@ void process_one_line(char arr_kmer[], int arr_len, int len_kmer,int round, bool
     if(!valid_kmer) return;
     (this->*(this->count_function))(k_mer, round, total_round);
     if(canonicalize)(this->*(this->count_function))(reverse_compliment(k_mer,len_kmer),round,total_round);
-   
+
 
 
     for(int l=start+1; arr_kmer[l+len_kmer-1]!='\0'; l++)     //iterating over 1 kmer

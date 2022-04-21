@@ -4,13 +4,11 @@
 using namespace std;
 uint64_t cal(string str_k_mer);
 clock_t start_time,end_time,total_time;
-
-string sample_kmer="AAACCGGTCTGTTGGGACCACT";  // len = 22
 string INPUT_FASTA_FILE = "",OUTPUT_SKETCH_FILE="";   //  "rymv.sim.fa"; //
 unsigned int kmer_len = 0;
-int counter=0;
 unsigned int NP = 20, NH = 7, TOTAL_ROUND = 4,SEED=137, counter_w,num_threads;
 bool CANONICALIZE = true, CONSERVATIVE = false;
+const int BITSIZE = 3;
 
 int main(int argc, char *argv[]){
     string mode(argv[1]);
@@ -25,20 +23,21 @@ int main(int argc, char *argv[]){
             else if(arg=="-t") num_threads=stoi(argv[++i]);
             else if(arg=="-o") OUTPUT_SKETCH_FILE = argv[++i];
             else if(arg=="-fa") INPUT_FASTA_FILE=argv[++i];
-            else if(arg=="-r") CANONICALIZE = false;
+            else if(arg=="--dnc") CANONICALIZE = false;
             else if(arg=="-c") CONSERVATIVE = true;
         }
+
         if(kmer_len <= 0 || INPUT_FASTA_FILE=="" || OUTPUT_SKETCH_FILE==""){
             cout<<"INVALID INPUT"; return 0;
         }
-        //end inouting
-        //cout<<NP<<" "<<NH<<" "<<TOTAL_ROUND<<" "<<OUTPUT_SKETCH_FILE<<" "<<INPUT_FASTA_FILE<<" "<<CANONICALIZE<<" ";
+        //end inputing
+        cout<<NP<<" "<<NH<<" "<<TOTAL_ROUND<<" "<<OUTPUT_SKETCH_FILE<<" "<<INPUT_FASTA_FILE<<" "<<CANONICALIZE<<" "<<BITSIZE<<"\n";
         if(!CONSERVATIVE){
             //construct OCM
             total_time = clock();
-            sketch::ocm::ocmbase <uint64_t, sketch::hash::WangHash,2> sketch1(NP,NH,137);
+            sketch::ocm::ocmbase <uint64_t, sketch::hash::WangHash,BITSIZE> sketch1(NP,NH,137);
             for(int r = 0; r< TOTAL_ROUND; r++){
-                sketch1.count_function = &sketch::ocm::ocmbase<uint64_t, sketch::hash::WangHash,2>::update_collision;
+                sketch1.count_function = &sketch::ocm::ocmbase<uint64_t, sketch::hash::WangHash,BITSIZE>::update_collision;
                 if (r > 0){
                     // for all kmers update collision
                     start_time = clock();
@@ -49,22 +48,23 @@ int main(int argc, char *argv[]){
 
                 sketch1.clear_core();
                 // for all kmer update count.
-                sketch1.count_function = &sketch::ocm::ocmbase<uint64_t, sketch::hash::WangHash,2>::update_count;
+                sketch1.count_function = &sketch::ocm::ocmbase<uint64_t, sketch::hash::WangHash,BITSIZE>::update_count;
                 start_time = clock();
                 sketch1.update_from_file(INPUT_FASTA_FILE, kmer_len, r, CANONICALIZE, 0);
                 end_time = clock();
                 cout<<"Updating count for ocms round "<<r<<" is completed in "<<(double)(end_time - start_time)/CLOCKS_PER_SEC<<" seconds\n";
                 //sketch1.showCounters(cal(sample_kmer));
             }
-            cout<<"Constructing ocms is completed in :"<<(double)(clock()-total_time)/CLOCKS_PER_SEC<<" seconds\n";
+            cout<<"Constructing offline count-min sketch is completed in :"<<(double)(clock()-total_time)/CLOCKS_PER_SEC<<" seconds\n";
             //end construct OCM
+            //Saving Sketch
             sketch1.save_sketch(OUTPUT_SKETCH_FILE);
         }
         else{
         //construct occm
         total_time = clock();
-        sketch::ocm::ocmbase <uint64_t, sketch::hash::WangHash,2> sketch2(NP,NH,137);
-        sketch2.count_function = &sketch::ocm::ocmbase<uint64_t, sketch::hash::WangHash,2>::update_collision;
+        sketch::ocm::ocmbase <uint64_t, sketch::hash::WangHash,BITSIZE> sketch2(NP,NH,137);
+        sketch2.count_function = &sketch::ocm::ocmbase<uint64_t, sketch::hash::WangHash,BITSIZE>::update_collision;
         for(int r = 0; r< TOTAL_ROUND; r++){
             if (r > 0){
                 // for all kmers update collision
@@ -74,7 +74,7 @@ int main(int argc, char *argv[]){
                 cout<<"Updating collision for occms round "<<r<<" is completed in "<<(double)(end_time - start_time)/CLOCKS_PER_SEC<<" seconds\n";
             }
             sketch2.clear_core();
-            sketch2.count_function = &sketch::ocm::ocmbase<uint64_t, sketch::hash::WangHash,2>::update_count_collision;
+            sketch2.count_function = &sketch::ocm::ocmbase<uint64_t, sketch::hash::WangHash,BITSIZE>::update_count_collision;
             // for all kmer update count collision
             start_time = clock();
             //for(auto kmer: kmers_vec) sketch2.update_count_collision(kmer,r,TOTAL_ROUND);
@@ -85,7 +85,7 @@ int main(int argc, char *argv[]){
 
         }
         //end occm
-        cout<<"Constructing occm is completed in :"<<(double)(clock()-total_time)/CLOCKS_PER_SEC<<" seconds\n";
+        cout<<"Constructing offline conservative count-min sketch is completed in :"<<(double)(clock()-total_time)/CLOCKS_PER_SEC<<" seconds\n";
         sketch2.save_sketch(OUTPUT_SKETCH_FILE);
         }
     }
@@ -108,14 +108,15 @@ int main(int argc, char *argv[]){
             cout<<"Can't open sketch file\n";
             return 0;
         }
+        int bitsize_from_file;
         input_sketch_file.read(reinterpret_cast<char *>(&NP), sizeof(NP));
         input_sketch_file.read(reinterpret_cast<char *>(&NH), sizeof(NH));
         input_sketch_file.read(reinterpret_cast<char *>(&SEED), sizeof(SEED));
         input_sketch_file.close();
 
-        //cout<<"Read input sketch file "<<NP<<" "<<NH<<" "<<SEED<<"\n";
+        cout<<"------Read input sketch file "<<NP<<" "<<NH<<" "<<SEED<<"\n";
 
-        sketch::ocm::ocmbase <uint64_t, sketch::hash::WangHash,2> query_sketch(NP,NH,SEED);
+        sketch::ocm::ocmbase <uint64_t, sketch::hash::WangHash,BITSIZE> query_sketch(NP,NH,SEED);
         query_sketch.load_from_sketch(input_sketch_name);
         ifstream infile(query_file_name);
         if(!infile.good()){cout<<"Couldn't open input query file\n";}

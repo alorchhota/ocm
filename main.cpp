@@ -4,7 +4,7 @@
 using namespace std;
 uint64_t cal(string str_k_mer);
 clock_t start_time,end_time,total_time;
-string INPUT_FASTA_FILE = "",OUTPUT_SKETCH_FILE="";   //  "rymv.sim.fa"; //
+string INPUT_FASTA_FILE = "",OUTPUT_SKETCH_FILE="";
 unsigned int kmer_len = 0;
 unsigned int NP = 20, NH = 7, TOTAL_ROUND = 4,SEED=137, counter_w,num_threads;
 bool CANONICALIZE = true, CONSERVATIVE = false;
@@ -23,7 +23,7 @@ int main(int argc, char *argv[]){
             else if(arg=="-t") num_threads=stoi(argv[++i]);
             else if(arg=="-o") OUTPUT_SKETCH_FILE = argv[++i];
             else if(arg=="-fa") INPUT_FASTA_FILE=argv[++i];
-            else if(arg=="--dnc") CANONICALIZE = false;
+            else if(arg=="-r") CANONICALIZE = false;
             else if(arg=="-c") CONSERVATIVE = true;
         }
 

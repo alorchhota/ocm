@@ -1,5 +1,5 @@
 #!/bin/bash
-rm ocm
+rm cm
 g++ -std=c++17 -o cm cm.cpp
 #./cm count [-c = conservative update] [-r = do not canonicalize] -k <kmer-length> [-h <counters-height>] [-w <counters-width>] -o <out-ocm-file> -fa <input-fasta-file>
 ./cm count -c -k 22 -h 7 -w 1048576 -o output.bin -fa input/lhg22L20MC5x.fa
